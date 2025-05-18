@@ -1,0 +1,17 @@
+{
+    "API_KEY": "your api key",
+    "STATION_CODE": "the station code",
+    "TARGET_PLATFORMS": ["1", "2"],
+    "TEST_MODE": false,
+    "UPDATE_INTERVAL": 45,
+    "ROTATE_DISPLAY": false, 
+    "SCROLL_SPEED": 15,
+    "CLOCK_FONT_SIZE": 90,
+    "TRAIN_FONT_SIZE": 60,
+    "STATUS_FONT_SIZE": 50,
+    "WEATHER_API_KEY": "", 
+	"LATITUDE" : your location,
+	"LONGITUDE" : your location
+
+  }
+  
