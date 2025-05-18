@@ -33,15 +33,20 @@ pip install pygame zeep
 ```
 
 3. Configure the application:
+ 
+   First copy the config-template.json to config.json
+```bash
+mv config-template.json config.json
+```
 
 The `config.json` file allows you to customize various aspects of the display:
 
 - `API_KEY`: Your National Rail Data Feeds API key
 - `STATION_CODE`: The station CRS code (e.g., "WAT" for London Waterloo)
 - `TARGET_PLATFORMS`: Array of platform numbers to display 
-- `UPDATE_INTERVAL`: Time between API updates (in seconds)
+- `UPDATE_INTERVAL`: Time between API updates (in seconds) *advised to keep at 60 seconds*
 - `ROTATE_DISPLAY`: Enable/disable display rotation 180deg
-- `SCROLL_SPEED`: Speed of scrolling text
+- `SCROLL_SPEED`: Speed of scrolling text 
 - `CLOCK_FONT_SIZE`: Size of the clock display
 - `TRAIN_FONT_SIZE`: Size of train information text
 - `STATUS_FONT_SIZE`: Size of status text
