@@ -17,14 +17,14 @@ A Python-based digital train departure board that displays real-time train infor
 - Python 3.x
 - Pygame
 - Zeep (SOAP client for Python)
-- National Rail Data Feeds API key
+- National Rail Data Feeds API key https://realtime.nationalrail.co.uk/OpenLDBWSRegistration
 
 ## Installation
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/jennybuni/train-board.git
-cd train-board
+git clone https://github.com/jennybuni/departure_board.git
+cd departure_board
 ```
 
 2. Install the required dependencies:
