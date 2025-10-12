@@ -1,7 +1,7 @@
 {
-    "API_KEY": "your api key",
-    "STATION_CODE": "the station code",
-    "TARGET_PLATFORMS": ["1", "2"],
+    "API_KEY": "6a8607cd-f202-46a3-91a2-e32a66ed4182",
+    "STATION_CODE": "CDF",
+    "TARGET_PLATFORMS": ["3", "4"],
     "TEST_MODE": false,
     "UPDATE_INTERVAL": 45,
     "ROTATE_DISPLAY": false, 
@@ -9,8 +9,7 @@
     "CLOCK_FONT_SIZE": 90,
     "TRAIN_FONT_SIZE": 60,
     "STATUS_FONT_SIZE": 50,
-	"LATITUDE" : your location ie 51.50, London
-	"LONGITUDE" : your location ie -0.11 London
+	  "LATITUDE" : 51.48,
+	  "LONGITUDE" : -3.17
 
   }
-  
