@@ -25,6 +25,7 @@ SAMPLE_CONFIG = {
     "UPDATE_INTERVAL": 30,
     "ROTATE_DISPLAY": False,
     "SCROLL_SPEED": 14,
+    "SCROLL_GAP": 200,
     "CLOCK_FONT_SIZE": 148,
     "TRAIN_FONT_SIZE": 56,
     "STATUS_FONT_SIZE": 50,
@@ -53,6 +54,7 @@ TEST_MODE = config.get("TEST_MODE", False)
 UPDATE_INTERVAL = config.get("UPDATE_INTERVAL", 30)
 ROTATE_DISPLAY = config.get("ROTATE_DISPLAY", False)
 SCROLL_SPEED = config.get("SCROLL_SPEED", 14)
+SCROLL_GAP = config.get("SCROLL_GAP", 200)
 CLOCK_FONT_SIZE = config.get("CLOCK_FONT_SIZE", 148)
 TRAIN_FONT_SIZE = config.get("TRAIN_FONT_SIZE", 56)
 STATUS_FONT_SIZE = config.get("STATUS_FONT_SIZE", 50)
@@ -73,7 +75,6 @@ try:
     logging.info("SOAP client initialised.")
 except Exception as e:
     logging.error(f"Failed to initialise SOAP client: {e}")
-    # If SOAP client fails, we still can run in TEST_MODE or show placeholder data.
     if not TEST_MODE:
         logging.warning("Switching to TEST_MODE because SOAP is unavailable.")
         TEST_MODE = True
@@ -82,11 +83,6 @@ except Exception as e:
 pygame.mixer.pre_init(0, 0, 0, 0)
 pygame.init()
 pygame.mixer.quit()
-
-# WINDOW_WIDTH = 1280
-# WINDOW_HEIGHT = 720
-# screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-# pygame.display.set_caption("Departures Board")
 
 screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 WINDOW_WIDTH, WINDOW_HEIGHT = screen.get_size()
@@ -105,31 +101,34 @@ except Exception as e:
     train_font = pygame.font.SysFont(None, TRAIN_FONT_SIZE)
     status_font = pygame.font.SysFont(None, STATUS_FONT_SIZE)
 
+# === Scrolling Text class with smooth wrap and configurable gap ===
 class ScrollingText:
-    def __init__(self, y_pos, text, x_start, end_x):
+    def __init__(self, y_pos, text, label_surface, x_margin=10, gap=SCROLL_GAP):
         self.text = text
         rendered_text = train_font.render(self.text, True, ORANGE)
         self.text_width = rendered_text.get_width()
-        # surface sized exactly to text height/width
         self.surface = pygame.Surface((self.text_width, train_font.get_height()), pygame.SRCALPHA).convert_alpha()
         self.surface.blit(rendered_text, (0, 0))
-        self.x_pos = x_start
         self.y_pos = y_pos
+        self.x_start = label_surface.get_width() + x_margin
+        self.x_pos = self.x_start
         self.speed = SCROLL_SPEED
-        self.end_x = end_x
+        self.gap = gap
+        self.clip_width = WINDOW_WIDTH - self.x_start - 20
 
     def update(self):
         self.x_pos -= self.speed
-        if self.x_pos + self.text_width < self.end_x:
-            # When fully scrolled past end_x, wrap to right
-            self.x_pos = WINDOW_WIDTH
+        if self.x_pos < self.x_start - self.text_width - self.gap:
+            self.x_pos += self.text_width + self.gap
 
     def draw(self, surface, clip_rect=None):
         if clip_rect:
             surface.set_clip(clip_rect)
         surface.blit(self.surface, (self.x_pos, self.y_pos))
+        surface.blit(self.surface, (self.x_pos + self.text_width + self.gap, self.y_pos))
         surface.set_clip(None)
 
+# === Fetch test departures ===
 def fetch_test_data_grouped(target_platforms):
     try:
         with open("test_data.json", "r") as file:
@@ -138,28 +137,26 @@ def fetch_test_data_grouped(target_platforms):
             for entry in test_data:
                 platform = str(entry.get("platform"))
                 if platform in platform_map and len(platform_map[platform]) < 2:
-                    platform_map[platform].append((entry["departure_time"], entry["destination"], entry.get("calling_at", ""), entry.get("status", "On time")))
+                    platform_map[platform].append(
+                        (entry["departure_time"], entry["destination"], entry.get("calling_at", ""), entry.get("status", "On time"))
+                    )
             return platform_map
     except Exception as e:
         logging.error(f"Error loading test data: {e}")
         return {p: [] for p in target_platforms}
 
+# === Fetch live departures ===
 def fetch_departures():
     if TEST_MODE:
         return fetch_test_data_grouped(TARGET_PLATFORMS)
-
     if soap_client is None:
         logging.error("SOAP client not available and TEST_MODE is False. Returning empty dataset.")
         return {p: [] for p in TARGET_PLATFORMS}
-
     try:
-        # NOTE: adjust the GetDepartureBoard parameters if your WSDL requires named args
         response = soap_client.service.GetDepartureBoard(10, STATION_CODE, _soapheaders=[soap_header_value])
         if not hasattr(response, 'trainServices') or not response.trainServices:
             return {p: [] for p in TARGET_PLATFORMS}
-
         services_by_platform = {platform: [] for platform in TARGET_PLATFORMS}
-
         for service in response.trainServices.service:
             platform = str(service.platform)
             if platform in services_by_platform and len(services_by_platform[platform]) < 2:
@@ -167,7 +164,6 @@ def fetch_departures():
                 departure_time = getattr(service, "std", "")
                 etd = getattr(service, "etd", "").strip().lower()
                 status = "On time" if etd == "on time" else f"Exp {etd}" if ":" in etd or etd.startswith("exp") else "Exp unknown"
-
                 calling_at = ""
                 if len(services_by_platform[platform]) == 0:
                     try:
@@ -179,83 +175,54 @@ def fetch_departures():
                                 calling_at = ", ".join(cp.locationName for cp in points if hasattr(cp, "locationName"))
                     except Exception as e:
                         logging.error(f"Failed to extract calling points for {destination}: {e}")
-
                 services_by_platform[platform].append((departure_time, destination, calling_at, status))
-
         return services_by_platform
     except Exception as e:
         logging.error(f"Error fetching data from SOAP: {str(e)}")
         return {p: [] for p in TARGET_PLATFORMS}
 
+# === Update display surfaces ===
 def update_display_multi_platform(departures_by_platform, static_text, scrolling_texts):
-    """
-    Update the lists of static surfaces and scrolling texts.
-    static_text: list of tuples (surface, (x, y)) or ("CALLING_AT_LABEL", (x, y), surface)
-    scrolling_texts: list of ScrollingText objects
-    """
     static_text.clear()
     scrolling_texts.clear()
-
-    y_pos = 20  # start slightly below top
-    for idx, (platform, departures) in enumerate(departures_by_platform.items()):
-        # Platform header
+    y_pos = 20
+    for platform, departures in departures_by_platform.items():
         header_surface = train_font.render(f"Platform {platform}", True, ORANGE)
         header_x = (WINDOW_WIDTH - header_surface.get_width()) // 2
         static_text.append((header_surface, (header_x, y_pos)))
-        y_pos += train_font.get_height() + 10  # spacing after header
-
+        y_pos += train_font.get_height() + 10
         for i, (departure_time, destination, calling_at, status) in enumerate(departures):
-            line_y = y_pos  # baseline for this train line
-
-            # Departure time
+            line_y = y_pos
             static_text.append((train_font.render(departure_time, True, ORANGE), (20, line_y)))
-
-            # Destination
             if len(destination) > 90:
-                scrolling_texts.append(ScrollingText(line_y, destination, WINDOW_WIDTH, -150))
+                scrolling_texts.append(ScrollingText(line_y, destination, train_font.render("", True, ORANGE), x_margin=250))
             else:
                 static_text.append((train_font.render(destination, True, ORANGE), (250, line_y)))
-
-            # Status/Exp aligned to line
             color = (255, 0, 0) if "Exp" in status else ORANGE
             status_surface = status_font.render(status, True, color)
             status_x = WINDOW_WIDTH - status_surface.get_width() - 30
             status_y = line_y + (train_font.get_height() - status_surface.get_height()) // 2
             static_text.append((status_surface, (status_x, status_y)))
-
-            # "Calling at" below the line (only for first train)
             if i == 0 and calling_at:
-                y_pos += train_font.get_height() + 10  # space before calling points
+                y_pos += train_font.get_height() + 10
                 label_surface = train_font.render("Calling at: ", True, ORANGE)
                 static_text.append(("CALLING_AT_LABEL", (20, y_pos), label_surface))
-
-                scroll_text = calling_at
-                x_start = 40 + label_surface.get_width() + 200  # adjust padding
-                scrolling_texts.append(ScrollingText(y_pos, scroll_text, x_start, -len(scroll_text) * 20))
-
-                y_pos += train_font.get_height() + 5  # spacing after calling points
-
-            # Move y_pos for next train
+                scrolling_texts.append(ScrollingText(y_pos, calling_at, label_surface, x_margin=5, gap=SCROLL_GAP))
+                y_pos += train_font.get_height() + 5
             y_pos += train_font.get_height() + status_font.get_height() - 40
+        y_pos += 10
 
-        y_pos += 10  # spacing between platforms
-
-
+# === Temperature fetch ===
 def get_temperature():
     try:
-        latitude = LATITUDE
-        longitude = LONGITUDE
-        if latitude is None or longitude is None:
+        if LATITUDE is None or LONGITUDE is None:
             return "N/A"
-        # Open-Meteo request
-        url = f"https://api.open-meteo.com/v1/forecast?latitude={latitude}&longitude={longitude}&current_weather=true"
+        url = f"https://api.open-meteo.com/v1/forecast?latitude={LATITUDE}&longitude={LONGITUDE}&current_weather=true"
         response = requests.get(url, timeout=5)
         data = response.json()
-        # open-meteo usually returns current_weather.temperature
         if response.status_code == 200:
             if "current_weather" in data and "temperature" in data["current_weather"]:
                 return f"{round(data['current_weather']['temperature'])}°C"
-            # fallback to other possible key
             if "current" in data and "temperature_2m" in data["current"]:
                 return f"{round(data['current']['temperature_2m'])}°C"
         return "N/A"
@@ -263,39 +230,35 @@ def get_temperature():
         logging.error(f"Error fetching temperature: {e}")
         return "N/A"
 
+# === Main loop ===
 def main():
     clock = pygame.time.Clock()
     scrolling_texts = []
     static_text = []
     static_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT)).convert()
-
-    # Initial fetch
     last_update_time = time.time() - UPDATE_INTERVAL
     last_temp_update = 0
     current_temp = "N/A"
-
     running = True
+
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                 running = False
 
-        # Update departures
+        # Update departures every interval
         if time.time() - last_update_time >= UPDATE_INTERVAL:
             last_departures = fetch_departures()
             update_display_multi_platform(last_departures, static_text, scrolling_texts)
-
-            # Redraw static_surface
             static_surface.fill(BLACK)
             for item in static_text:
                 if isinstance(item[0], str) and item[0] == "CALLING_AT_LABEL":
                     static_surface.blit(item[2], item[1])
                 elif isinstance(item[0], pygame.Surface):
                     static_surface.blit(item[0], item[1])
-
             last_update_time = time.time()
 
-        # Update temperature every 10 minutes
+        # Update temperature every 10 min
         if time.time() - last_temp_update >= 600:
             current_temp = get_temperature()
             last_temp_update = time.time()
@@ -303,30 +266,25 @@ def main():
         # Draw frame
         frame_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT)).convert()
         frame_surface.blit(static_surface, (0, 0))
-
-        # Update and draw scrolling texts
         for text in scrolling_texts:
+            clip_rect = pygame.Rect(text.x_start, text.y_pos, text.clip_width, train_font.get_height())
             text.update()
-            clip_rect = pygame.Rect(400, text.y_pos, WINDOW_WIDTH - 400, train_font.get_height())
             text.draw(frame_surface, clip_rect)
 
         # Draw clock and temperature
         current_time = datetime.now().strftime("%H:%M:%S")
         clock_text = clock_font.render(current_time, True, ORANGE)
         temp_text = train_font.render(current_temp, True, ORANGE)
-
         clock_x = (WINDOW_WIDTH - clock_text.get_width()) // 2
         clock_y = WINDOW_HEIGHT - clock_text.get_height() - 20
         temp_x = clock_x + clock_text.get_width() + 60
         temp_y = clock_y + (clock_text.get_height() - temp_text.get_height()) // 2
-
         pygame.draw.rect(frame_surface, BLACK, (
             clock_x - 10,
             clock_y - 10,
             clock_text.get_width() + temp_text.get_width() + 70,
             clock_text.get_height() + 20
         ))
-
         frame_surface.blit(clock_text, (clock_x, clock_y))
         frame_surface.blit(temp_text, (temp_x, temp_y))
 
