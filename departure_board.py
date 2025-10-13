@@ -27,6 +27,7 @@ SAMPLE_CONFIG = {
     "SCROLL_SPEED": 14,
     "SCROLL_GAP": 200,
     "CLOCK_FONT_SIZE": 148,
+    "PLATFORM_FONT_SIZE": 72,
     "TRAIN_FONT_SIZE": 56,
     "STATUS_FONT_SIZE": 50,
     "LATITUDE": 51.5074,
@@ -56,6 +57,7 @@ ROTATE_DISPLAY = config.get("ROTATE_DISPLAY", False)
 SCROLL_SPEED = config.get("SCROLL_SPEED", 14)
 SCROLL_GAP = config.get("SCROLL_GAP", 200)
 CLOCK_FONT_SIZE = config.get("CLOCK_FONT_SIZE", 148)
+PLATFORM_FONT_SIZE = config.get("PLATFORM_FONT_SIZE", 72)
 TRAIN_FONT_SIZE = config.get("TRAIN_FONT_SIZE", 56)
 STATUS_FONT_SIZE = config.get("STATUS_FONT_SIZE", 50)
 LATITUDE = config.get("LATITUDE")
@@ -89,19 +91,22 @@ WINDOW_WIDTH, WINDOW_HEIGHT = screen.get_size()
 
 BLACK = (0, 0, 0)
 ORANGE = (255, 165, 0)
+PLATFORM_BG_COLOR = (50, 50, 50)
 
 font_path = "fonts/bus-stop.ttf"
 try:
     clock_font = pygame.font.Font(font_path, CLOCK_FONT_SIZE)
+    platform_font = pygame.font.Font(font_path, PLATFORM_FONT_SIZE)
     train_font = pygame.font.Font(font_path, TRAIN_FONT_SIZE)
     status_font = pygame.font.Font(font_path, STATUS_FONT_SIZE)
 except Exception as e:
     logging.warning(f"Failed to load custom font ({font_path}): {e}. Falling back to system fonts.")
     clock_font = pygame.font.SysFont(None, CLOCK_FONT_SIZE)
+    platform_font = pygame.font.SysFont(None, PLATFORM_FONT_SIZE)
     train_font = pygame.font.SysFont(None, TRAIN_FONT_SIZE)
     status_font = pygame.font.SysFont(None, STATUS_FONT_SIZE)
 
-# === Scrolling Text class with smooth wrap and configurable gap ===
+# === Scrolling Text class ===
 class ScrollingText:
     def __init__(self, y_pos, text, label_surface, x_margin=10, gap=SCROLL_GAP):
         self.text = text
@@ -187,10 +192,18 @@ def update_display_multi_platform(departures_by_platform, static_text, scrolling
     scrolling_texts.clear()
     y_pos = 20
     for platform, departures in departures_by_platform.items():
-        header_surface = train_font.render(f"Platform {platform}", True, ORANGE)
-        header_x = (WINDOW_WIDTH - header_surface.get_width()) // 2
-        static_text.append((header_surface, (header_x, y_pos)))
-        y_pos += train_font.get_height() + 10
+        # Platform header with background
+        header_text = f"Platform {platform}"
+        header_surface = platform_font.render(header_text, True, ORANGE)
+        header_rect = header_surface.get_rect()
+        header_rect.width = WINDOW_WIDTH
+        header_rect.height = header_surface.get_height() + 10
+        header_bg_surface = pygame.Surface((WINDOW_WIDTH, header_rect.height))
+        header_bg_surface.fill(PLATFORM_BG_COLOR)
+        header_bg_surface.blit(header_surface, ((WINDOW_WIDTH - header_surface.get_width()) // 2, 5))
+        static_text.append((header_bg_surface, (0, y_pos)))
+        y_pos += header_rect.height + 5
+
         for i, (departure_time, destination, calling_at, status) in enumerate(departures):
             line_y = y_pos
             static_text.append((train_font.render(departure_time, True, ORANGE), (20, line_y)))
@@ -246,7 +259,7 @@ def main():
             if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                 running = False
 
-        # Update departures every interval
+        # Update departures
         if time.time() - last_update_time >= UPDATE_INTERVAL:
             last_departures = fetch_departures()
             update_display_multi_platform(last_departures, static_text, scrolling_texts)
@@ -280,10 +293,7 @@ def main():
         temp_x = clock_x + clock_text.get_width() + 60
         temp_y = clock_y + (clock_text.get_height() - temp_text.get_height()) // 2
         pygame.draw.rect(frame_surface, BLACK, (
-            clock_x - 10,
-            clock_y - 10,
-            clock_text.get_width() + temp_text.get_width() + 70,
-            clock_text.get_height() + 20
+            clock_x - 10, clock_y - 10, clock_text.get_width() + temp_text.get_width() + 70, clock_text.get_height() + 20
         ))
         frame_surface.blit(clock_text, (clock_x, clock_y))
         frame_surface.blit(temp_text, (temp_x, temp_y))
@@ -296,7 +306,6 @@ def main():
         clock.tick(60)
 
     pygame.quit()
-
 
 if __name__ == "__main__":
     main()
