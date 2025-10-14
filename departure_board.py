@@ -158,7 +158,7 @@ def fetch_departures():
         logging.error("SOAP client not available and TEST_MODE is False. Returning empty dataset.")
         return {p: [] for p in TARGET_PLATFORMS}
     try:
-        response = soap_client.service.GetDepartureBoard(10, STATION_CODE, _soapheaders=[soap_header_value])
+        response = soap_client.service.GetDepartureBoard(40, STATION_CODE, _soapheaders=[soap_header_value])
         if not hasattr(response, 'trainServices') or not response.trainServices:
             return {p: [] for p in TARGET_PLATFORMS}
         services_by_platform = {platform: [] for platform in TARGET_PLATFORMS}
