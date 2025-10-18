@@ -1,0 +1,16 @@
+{
+    "API_KEY": "6a8607cd-f202-46a3-91a2-e32a66ed4182",
+    "STATION_CODE": "CDF",
+    "TARGET_PLATFORMS": ["1", "2", "3", "4"],
+    "TEST_MODE": false,
+    "UPDATE_INTERVAL": 45,
+    "ROTATE_DISPLAY": false, 
+    "SCROLL_SPEED": 5,
+    "CLOCK_FONT_SIZE": 50,
+    "PLATFORM_FONT_SIZE": 50,
+    "TRAIN_FONT_SIZE": 30,
+    "STATUS_FONT_SIZE": 20,
+	"LATITUDE": 51.48,
+	"LONGITUDE": -3.17
+  }
+  
