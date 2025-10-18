@@ -1,18 +1,31 @@
 {
-    "API_KEY": "6a8607cd-f202-46a3-91a2-e32a66ed4182",
-    "STATION_CODE": "CDF",
-    "TARGET_PLATFORMS": ["0", "1", "2", "3", "4", "6", "7", "8"],
-    "TEST_MODE": false,
-    "UPDATE_INTERVAL": 45,
-    "ROTATE_DISPLAY": false, 
-    "SCROLL_SPEED": 5,
-    "CLOCK_FONT_SIZE": 50,
-    "PLATFORM_FONT_SIZE": 50,
-    "TRAIN_FONT_SIZE": 30,
-    "STATUS_FONT_SIZE": 20,
-	  "LATITUDE": 51.48,
-	  "LONGITUDE": -3.17,
-    "PLATFORMS_PER_SCREEN": 4,
-    "SCREEN_ROTATE_INTERVAL": 20
-  }
+  "API_KEY": "6a8607cd-f202-46a3-91a2-e32a66ed4182",
+  "STATIONS": {
+    "CDF": {
+      "NAME": "Cardiff Central",
+      "PLATFORMS": [0, 1, 2, 3, 4, 6, 7, 8],
+      "LATITUDE": 51.47,
+      "LONGITUDE": -3.18
+    },
+    "NCL": {
+      "NAME": "Newcastle",
+      "PLATFORMS": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+      "LATITUDE": 54.968,
+      "LONGITUDE": -1.617
+    }
+  },
+  "STATION_ROTATE_INTERVAL": 30,
+  "PLATFORMS_PER_SCREEN": 4,
+  "SCREEN_ROTATE_INTERVAL": 10,
+  "UPDATE_INTERVAL": 45,
+  "TEST_MODE": false,
+  "ROTATE_DISPLAY": false,
+  "SCROLL_SPEED": 5,
+  "SCROLL_GAP": 200,
+  "CLOCK_FONT_SIZE": 50,
+  "PLATFORM_FONT_SIZE": 50,
+  "TRAIN_FONT_SIZE": 30,
+  "STATUS_FONT_SIZE": 20
+}
+
   
