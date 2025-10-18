@@ -62,6 +62,9 @@ TRAIN_FONT_SIZE = config.get("TRAIN_FONT_SIZE", 56)
 STATUS_FONT_SIZE = config.get("STATUS_FONT_SIZE", 50)
 LATITUDE = config.get("LATITUDE")
 LONGITUDE = config.get("LONGITUDE")
+PLATFORMS_PER_SCREEN = config.get("PLATFORMS_PER_SCREEN", 4)
+SCREEN_ROTATE_INTERVAL = config.get("SCREEN_ROTATE_INTERVAL", 20)
+
 
 # === Set up SOAP client (defensive) ===
 WSDL_URL = "https://lite.realtime.nationalrail.co.uk/OpenLDBWS/wsdl.aspx"
@@ -242,6 +245,11 @@ def get_temperature():
     except Exception as e:
         logging.error(f"Error fetching temperature: {e}")
         return "N/A"
+    
+def get_paginated_platforms(all_platforms, per_page):
+    """Split platform list into pages of fixed size."""
+    for i in range(0, len(all_platforms), per_page):
+        yield all_platforms[i:i + per_page]
 
 # === Main loop ===
 def main():
@@ -254,15 +262,37 @@ def main():
     current_temp = "N/A"
     running = True
 
+    # === Platform screen rotation setup ===
+    platform_pages = list(get_paginated_platforms(TARGET_PLATFORMS, PLATFORMS_PER_SCREEN))
+    current_page_index = 0
+    last_screen_switch = time.time()
+
+    logging.info(f"Display divided into {len(platform_pages)} screens of {PLATFORMS_PER_SCREEN} platforms each.")
+
+    # === Initial data fetch ===
+    departures_all = fetch_departures()
+    visible_platforms = platform_pages[current_page_index]
+    subset = {p: departures_all.get(p, []) for p in visible_platforms}
+    update_display_multi_platform(subset, static_text, scrolling_texts)
+    static_surface.fill(BLACK)
+    for item in static_text:
+        if isinstance(item[0], str) and item[0] == "CALLING_AT_LABEL":
+            static_surface.blit(item[2], item[1])
+        elif isinstance(item[0], pygame.Surface):
+            static_surface.blit(item[0], item[1])
+
+    # === Main loop ===
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                 running = False
 
-        # Update departures
+        # === Periodic departure updates ===
         if time.time() - last_update_time >= UPDATE_INTERVAL:
-            last_departures = fetch_departures()
-            update_display_multi_platform(last_departures, static_text, scrolling_texts)
+            departures_all = fetch_departures()
+            visible_platforms = platform_pages[current_page_index]
+            subset = {p: departures_all.get(p, []) for p in visible_platforms}
+            update_display_multi_platform(subset, static_text, scrolling_texts)
             static_surface.fill(BLACK)
             for item in static_text:
                 if isinstance(item[0], str) and item[0] == "CALLING_AT_LABEL":
@@ -271,20 +301,36 @@ def main():
                     static_surface.blit(item[0], item[1])
             last_update_time = time.time()
 
-        # Update temperature every 10 min
+        # === Switch between platform pages ===
+        if time.time() - last_screen_switch >= SCREEN_ROTATE_INTERVAL:
+            current_page_index = (current_page_index + 1) % len(platform_pages)
+            last_screen_switch = time.time()
+            logging.info(f"Switched to platform page {current_page_index + 1}/{len(platform_pages)}")
+            visible_platforms = platform_pages[current_page_index]
+            subset = {p: departures_all.get(p, []) for p in visible_platforms}
+            update_display_multi_platform(subset, static_text, scrolling_texts)
+            static_surface.fill(BLACK)
+            for item in static_text:
+                if isinstance(item[0], str) and item[0] == "CALLING_AT_LABEL":
+                    static_surface.blit(item[2], item[1])
+                elif isinstance(item[0], pygame.Surface):
+                    static_surface.blit(item[0], item[1])
+
+        # === Temperature refresh every 10 min ===
         if time.time() - last_temp_update >= 600:
             current_temp = get_temperature()
             last_temp_update = time.time()
 
-        # Draw frame
+        # === Frame rendering ===
         frame_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT)).convert()
         frame_surface.blit(static_surface, (0, 0))
+
         for text in scrolling_texts:
             clip_rect = pygame.Rect(text.x_start, text.y_pos, text.clip_width, train_font.get_height())
             text.update()
             text.draw(frame_surface, clip_rect)
 
-        # Draw clock and temperature
+        # === Draw clock and temperature ===
         current_time = datetime.now().strftime("%H:%M:%S")
         clock_text = clock_font.render(current_time, True, ORANGE)
         temp_text = train_font.render(current_temp, True, ORANGE)
@@ -292,9 +338,13 @@ def main():
         clock_y = WINDOW_HEIGHT - clock_text.get_height() - 20
         temp_x = clock_x + clock_text.get_width() + 60
         temp_y = clock_y + (clock_text.get_height() - temp_text.get_height()) // 2
+
         pygame.draw.rect(frame_surface, BLACK, (
-            clock_x - 10, clock_y - 10, clock_text.get_width() + temp_text.get_width() + 70, clock_text.get_height() + 20
+            clock_x - 10, clock_y - 10,
+            clock_text.get_width() + temp_text.get_width() + 70,
+            clock_text.get_height() + 20
         ))
+
         frame_surface.blit(clock_text, (clock_x, clock_y))
         frame_surface.blit(temp_text, (temp_x, temp_y))
 
@@ -306,6 +356,7 @@ def main():
         clock.tick(60)
 
     pygame.quit()
+
 
 if __name__ == "__main__":
     main()
