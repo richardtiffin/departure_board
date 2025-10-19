@@ -308,12 +308,24 @@ def main():
         platform_pages = list(get_paginated_platforms(all_platforms, PLATFORMS_PER_SCREEN))
 
         # Rotate platform pages
-        if len(platform_pages)>1 and time.time()-last_screen_rotate>=SCREEN_ROTATE_INTERVAL:
-            current_screen_index = (current_screen_index +1)%len(platform_pages)
-            last_screen_rotate = time.time()
-            page_changed = True
+        # Only rotate if more than one page and enough time has passed
+        if len(platform_pages) > 1 and time.time() - last_screen_rotate >= SCREEN_ROTATE_INTERVAL:
+            for _ in range(len(platform_pages)):  # Try all pages until we find one with trains
+                # Move to next page
+                current_screen_index = (current_screen_index + 1) % len(platform_pages)
+                current_targets = platform_pages[current_screen_index]
 
-        current_targets = platform_pages[current_screen_index]
+                # Check if any platform on this page has departures
+                departures = fetch_departures(STATION_CODE, current_targets)
+                if any(departures[p] for p in current_targets):
+                    page_changed = True
+                    last_screen_rotate = time.time()
+                    break
+            else:
+                # No page has departures, keep current_screen_index and don't rotate
+                current_targets = platform_pages[current_screen_index]
+        else:
+            current_targets = platform_pages[current_screen_index]
 
         # Fetch departures
         if station_changed or page_changed or time.time()-last_update_time>=UPDATE_INTERVAL:
