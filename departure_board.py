@@ -203,6 +203,9 @@ def update_display_multi_platform_with_calling_at(departures_by_platform, static
     y_pos = station_font.get_height() + 50
 
     for platform, departures in departures_by_platform.items():
+        if not departures:
+            continue  # Skip platforms with no trains
+
         # Platform header
         header_text = f"Platform {platform}"
         header_surface = platform_font.render(header_text, True, ORANGE)
@@ -240,6 +243,7 @@ def update_display_multi_platform_with_calling_at(departures_by_platform, static
 
             y_pos += train_font.get_height() + status_font.get_height() -40
         y_pos += 10
+
 
 def get_temperature(lat, lon):
     try:
