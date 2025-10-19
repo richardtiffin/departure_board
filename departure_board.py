@@ -281,6 +281,15 @@ def main():
         station_changed = False
         page_changed = False
 
+        # Update temperature
+        if time.time()-last_temp_update>=600:
+            allTemp = {}
+            for code in station_codes:
+                stationForTemp = STATIONS[code]
+                current_temp = get_temperature(stationForTemp.get("LATITUDE"),stationForTemp.get("LONGITUDE"))
+                allTemp[code] = current_temp
+            last_temp_update = time.time()
+
         # Rotate stations
         if time.time() - last_station_rotate >= STATION_ROTATE_INTERVAL:
             station_index = (station_index +1)%len(station_codes)
@@ -289,6 +298,7 @@ def main():
             station_changed = True
 
         current_station = STATIONS[station_codes[station_index]]
+        current_temp = allTemp[station_codes[station_index]]
         STATION_CODE = station_codes[station_index]
         all_platforms = [str(p) for p in current_station.get("PLATFORMS",[])]
         platform_pages = list(get_paginated_platforms(all_platforms, PLATFORMS_PER_SCREEN))
@@ -312,11 +322,6 @@ def main():
                 elif isinstance(item[0],str) and item[0]=="CALLING_AT_LABEL":
                     static_surface.blit(item[2], item[1])
             last_update_time = time.time()
-
-        # Update temperature
-        if time.time()-last_temp_update>=600:
-            current_temp = get_temperature(current_station.get("LATITUDE"),current_station.get("LONGITUDE"))
-            last_temp_update = time.time()
 
         # Draw frame
         frame_surface = pygame.Surface((WINDOW_WIDTH,WINDOW_HEIGHT)).convert()
