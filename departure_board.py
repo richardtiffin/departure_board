@@ -76,6 +76,9 @@ STATION_FONT_SIZE = config.get("STATION_FONT_SIZE", 80)
 PLATFORM_FONT_SIZE = config.get("PLATFORM_FONT_SIZE", 72)
 TRAIN_FONT_SIZE = config.get("TRAIN_FONT_SIZE", 56)
 STATUS_FONT_SIZE = config.get("STATUS_FONT_SIZE", 50)
+WINDOW_WIDTH = 800
+WINDOW_HEIGHT = 480
+FULLSCREEN = False
 
 # === Setup SOAP client ===
 WSDL_URL = "https://lite.realtime.nationalrail.co.uk/OpenLDBWS/wsdl.aspx"
@@ -96,7 +99,12 @@ except Exception as e:
 pygame.mixer.pre_init(0,0,0,0)
 pygame.init()
 pygame.mixer.quit()
-screen = pygame.display.set_mode((0,0), pygame.FULLSCREEN)
+
+if FULLSCREEN:
+    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+else:
+    screen = pygame.display.set_mode((800, 480), 0)
+
 WINDOW_WIDTH, WINDOW_HEIGHT = screen.get_size()
 
 BLACK = (0,0,0)
@@ -194,7 +202,9 @@ def fetch_departures(station_code, target_platforms):
                         pass
                 services_by_platform[platform].append((departure_time,destination,calling_at,status))
         return services_by_platform
-    except:
+    except Exception as e:
+        logging.exception(f"GetDepartureBoard failed for {station_code}: {e}")
+        print("SOAP ERROR:", e)
         return {p:[] for p in target_platforms}
 
 def update_display_multi_platform_with_calling_at(departures_by_platform, static_text, scrolling_texts):
