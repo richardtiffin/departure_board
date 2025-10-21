@@ -4,7 +4,7 @@ from requests import Session
 from requests.exceptions import HTTPError
 import traceback
 
-API_KEY = "YOUR_REAL_KEY_HERE"
+API_KEY = "c5dd7e87-7ae9-43fa-8add-cfe78ed0d00c"
 WSDL_URL = "https://lite.realtime.nationalrail.co.uk/OpenLDBWS/wsdl.aspx?ver=2021-11-01"
 
 # Build SOAP header

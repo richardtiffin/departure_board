@@ -78,7 +78,7 @@ TRAIN_FONT_SIZE = config.get("TRAIN_FONT_SIZE", 56)
 STATUS_FONT_SIZE = config.get("STATUS_FONT_SIZE", 50)
 WINDOW_WIDTH = 800
 WINDOW_HEIGHT = 480
-FULLSCREEN = True
+FULLSCREEN = False
 
 # === Setup SOAP client ===
 WSDL_URL = "https://lite.realtime.nationalrail.co.uk/OpenLDBWS/wsdl.aspx"
@@ -94,6 +94,11 @@ try:
 except Exception as e:
     logging.error(f"SOAP client init failed: {e}")
     TEST_MODE = True
+
+# === Service details cache to avoid repeated calls ===
+service_details_cache = {}
+SERVICE_DETAILS_TTL = 600  # seconds, cache entries expire after 10 minutes
+last_service_details_cleanup = time.time()
 
 # === Pygame setup ===
 pygame.mixer.pre_init(0,0,0,0)
@@ -173,39 +178,64 @@ def fetch_test_data_grouped(target_platforms):
         return {p:[] for p in target_platforms}
 
 def fetch_departures(station_code, target_platforms):
-    if TEST_MODE:
+    global last_service_details_cleanup, service_details_cache
+
+    if TEST_MODE or soap_client is None:
         return fetch_test_data_grouped(target_platforms)
-    if soap_client is None:
-        return {p:[] for p in target_platforms}
+
+    # Cleanup old cache entries periodically
+    if time.time() - last_service_details_cleanup > SERVICE_DETAILS_TTL:
+        service_details_cache = {}  # reset cache
+        last_service_details_cleanup = time.time()
+
     try:
+        # Fetch main departure board once
         response = soap_client.service.GetDepartureBoard(40, station_code, _soapheaders=[soap_header_value])
+
         if not hasattr(response, 'trainServices') or not response.trainServices:
             return {p:[] for p in target_platforms}
+
         services_by_platform = {p:[] for p in target_platforms}
+
         for service in response.trainServices.service:
             platform = str(service.platform)
-            if platform in services_by_platform and len(services_by_platform[platform])<2:
-                destination = service.destination.location[0].locationName
-                departure_time = getattr(service, "std","")
-                etd = getattr(service,"etd","").strip().lower()
-                status = "On time" if etd=="on time" else f"Exp {etd}" if ":" in etd or etd.startswith("exp") else "Exp unknown"
-                calling_at = ""
-                if len(services_by_platform[platform])==0:
+            if platform not in services_by_platform or len(services_by_platform[platform]) >= 2:
+                continue
+
+            destination = service.destination.location[0].locationName
+            departure_time = getattr(service, "std", "")
+            etd = getattr(service, "etd", "").strip().lower()
+            status = "On time" if etd=="on time" else f"Exp {etd}" if ":" in etd or etd.startswith("exp") else "Exp unknown"
+            calling_at = ""
+
+            # Only fetch service details if needed and not cached
+            service_id = service.serviceID
+            if len(services_by_platform[platform]) == 0:
+                if service_id in service_details_cache:
+                    details = service_details_cache[service_id]
+                else:
                     try:
-                        details = soap_client.service.GetServiceDetails(service.serviceID, _soapheaders=[soap_header_value])
-                        if hasattr(details,'subsequentCallingPoints') and details.subsequentCallingPoints:
-                            point_lists = details.subsequentCallingPoints.callingPointList
-                            if isinstance(point_lists,list) and point_lists:
-                                points = point_lists[0].callingPoint
-                                calling_at = ", ".join(cp.locationName for cp in points if hasattr(cp,"locationName"))
+                        details = soap_client.service.GetServiceDetails(service_id, _soapheaders=[soap_header_value])
+                        service_details_cache[service_id] = details
+                        time.sleep(0.2)  # small delay to avoid bursting requests
                     except:
-                        pass
-                services_by_platform[platform].append((departure_time,destination,calling_at,status))
+                        details = None
+
+                if details and hasattr(details,'subsequentCallingPoints') and details.subsequentCallingPoints:
+                    point_lists = details.subsequentCallingPoints.callingPointList
+                    if isinstance(point_lists,list) and point_lists:
+                        points = point_lists[0].callingPoint
+                        calling_at = ", ".join(cp.locationName for cp in points if hasattr(cp,"locationName"))
+
+            services_by_platform[platform].append((departure_time, destination, calling_at, status))
+
         return services_by_platform
+
     except Exception as e:
         logging.exception(f"GetDepartureBoard failed for {station_code}: {e}")
         print("SOAP ERROR:", e)
         return {p:[] for p in target_platforms}
+
 
 def update_display_multi_platform_with_calling_at(departures_by_platform, static_text, scrolling_texts):
     static_text.clear()

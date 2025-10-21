@@ -4,7 +4,7 @@ from requests import Session
 from requests.exceptions import HTTPError
 
 WSDL_URL = "https://lite.realtime.nationalrail.co.uk/OpenLDBWS/wsdl.aspx?ver=2021-11-01"
-API_KEY = "6440d370-a69d-42e5-97f3-110737ba5fa9"
+API_KEY = "c5dd7e87-7ae9-43fa-8add-cfe78ed0d00c"
 
 # Build SOAP header
 from zeep import xsd
