@@ -78,7 +78,7 @@ TRAIN_FONT_SIZE = config.get("TRAIN_FONT_SIZE", 56)
 STATUS_FONT_SIZE = config.get("STATUS_FONT_SIZE", 50)
 WINDOW_WIDTH = 800
 WINDOW_HEIGHT = 480
-FULLSCREEN = False
+FULLSCREEN = True
 
 # === Setup SOAP client ===
 WSDL_URL = "https://lite.realtime.nationalrail.co.uk/OpenLDBWS/wsdl.aspx"
