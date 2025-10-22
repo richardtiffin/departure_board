@@ -308,92 +308,103 @@ def main():
     last_temp_update = 0
     current_temp = "N/A"
 
-    # Station rotation
+    # --- Station rotation ---
     station_codes = list(STATIONS.keys())
     station_index = 0
     current_screen_index = 0
     last_station_rotate = time.time()
     last_screen_rotate = time.time()
     departures = {}
+    NO_DEPARTURES_COOLDOWN = 60  # seconds to wait if no trains
+    last_successful_fetch = 0  # timestamp of last fetch with departures
 
     running = True
     while running:
+        now = time.time()
         for event in pygame.event.get():
             if event.type == pygame.QUIT or (event.type==pygame.KEYDOWN and event.key==pygame.K_ESCAPE):
                 running = False
 
-        station_changed = False
-        page_changed = False
-
-        # Update temperature
-        if time.time()-last_temp_update>=600:
+        # --- Update temperature every 10 min ---
+        if now - last_temp_update >= 600:
             allTemp = {}
             for code in station_codes:
                 stationForTemp = STATIONS[code]
                 current_temp = get_temperature(stationForTemp.get("LATITUDE"),stationForTemp.get("LONGITUDE"))
                 allTemp[code] = current_temp
-            last_temp_update = time.time()
+            last_temp_update = now
 
-        # Rotate stations
-        if time.time() - last_station_rotate >= STATION_ROTATE_INTERVAL:
-            station_index = (station_index +1)%len(station_codes)
+        # --- Rotate stations ---
+        station_changed = False
+        if now - last_station_rotate >= STATION_ROTATE_INTERVAL:
+            station_index = (station_index + 1) % len(station_codes)
             current_screen_index = 0
-            last_station_rotate = time.time()
+            last_station_rotate = now
             station_changed = True
 
         current_station = STATIONS[station_codes[station_index]]
-        current_temp = allTemp[station_codes[station_index]]
+        current_temp = allTemp.get(station_codes[station_index], "N/A")
         STATION_CODE = station_codes[station_index]
         all_platforms = [str(p) for p in current_station.get("PLATFORMS",[])]
         platform_pages = list(get_paginated_platforms(all_platforms, PLATFORMS_PER_SCREEN))
 
-        # Rotate platform pages
-        # Only rotate if more than one page and enough time has passed
-        if len(platform_pages) > 1 and time.time() - last_screen_rotate >= SCREEN_ROTATE_INTERVAL:
-            for _ in range(len(platform_pages)):  # Try all pages until we find one with trains
-                # Move to next page
+        # --- Rotate platform pages ---
+        page_changed = False
+        if len(platform_pages) > 1 and now - last_screen_rotate >= SCREEN_ROTATE_INTERVAL:
+            for _ in range(len(platform_pages)):
                 current_screen_index = (current_screen_index + 1) % len(platform_pages)
                 current_targets = platform_pages[current_screen_index]
 
-                # Check if any platform on this page has departures
+                # Only fetch if cooldown elapsed
+                if now - last_successful_fetch < NO_DEPARTURES_COOLDOWN:
+                    break
+
                 departures = fetch_departures(STATION_CODE, current_targets)
                 if any(departures[p] for p in current_targets):
                     page_changed = True
-                    last_screen_rotate = time.time()
+                    last_screen_rotate = now
+                    last_successful_fetch = now
                     break
             else:
-                # No page has departures, keep current_screen_index and don't rotate
+                # No page has departures; keep current_screen_index and skip rotation
                 current_targets = platform_pages[current_screen_index]
         else:
             current_targets = platform_pages[current_screen_index]
 
-        # Fetch departures
-        if station_changed or page_changed or time.time()-last_update_time>=UPDATE_INTERVAL:
-            departures = fetch_departures(STATION_CODE,current_targets)
-            update_display_multi_platform_with_calling_at(departures, static_text, scrolling_texts)
-            static_surface.fill(BLACK)
-            for item in static_text:
-                if isinstance(item[0],pygame.Surface):
-                    static_surface.blit(item[0], item[1])
-                elif isinstance(item[0],str) and item[0]=="CALLING_AT_LABEL":
-                    static_surface.blit(item[2], item[1])
-            last_update_time = time.time()
+        # --- Fetch departures if station/page changed or interval elapsed ---
+        if station_changed or page_changed or now - last_update_time >= UPDATE_INTERVAL:
+            if now - last_successful_fetch >= NO_DEPARTURES_COOLDOWN:
+                departures = fetch_departures(STATION_CODE, current_targets)
+                if any(departures[p] for p in current_targets):
+                    last_successful_fetch = now
+                    update_display_multi_platform_with_calling_at(departures, static_text, scrolling_texts)
+                    static_surface.fill(BLACK)
+                    for item in static_text:
+                        if isinstance(item[0], pygame.Surface):
+                            static_surface.blit(item[0], item[1])
+                        elif isinstance(item[0], str) and item[0]=="CALLING_AT_LABEL":
+                            static_surface.blit(item[2], item[1])
+                else:
+                    # No departures: start cooldown
+                    last_successful_fetch = now
 
-        # Draw frame
-        frame_surface = pygame.Surface((WINDOW_WIDTH,WINDOW_HEIGHT)).convert()
-        frame_surface.blit(static_surface,(0,0))
+            last_update_time = now
+
+        # --- Draw frame ---
+        frame_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT)).convert()
+        frame_surface.blit(static_surface, (0,0))
+
         for text in scrolling_texts:
-            clip_rect = pygame.Rect(text.x_start,text.y_pos,text.clip_width,train_font.get_height())
+            clip_rect = pygame.Rect(text.x_start, text.y_pos, text.clip_width, train_font.get_height())
             text.update()
-            text.draw(frame_surface,clip_rect)
+            text.draw(frame_surface, clip_rect)
 
-                # Clock, temperature, station
+        # --- Clock, temperature, station ---
         current_time = datetime.now().strftime("%H:%M:%S")
         clock_text = clock_font.render(current_time, True, ORANGE)
         temp_text = train_font.render(current_temp, True, ORANGE)
         station_text = station_font.render(current_station.get("NAME", ""), True, ORANGE)
 
-        # Positioning
         clock_x = (WINDOW_WIDTH - clock_text.get_width()) // 2
         clock_y = WINDOW_HEIGHT - clock_text.get_height() - 20
         temp_x = clock_x + clock_text.get_width() + 60
@@ -401,14 +412,12 @@ def main():
         station_x = (WINDOW_WIDTH - station_text.get_width()) // 2
         station_y = 20
 
-        # Draw background behind clock/temp
         pygame.draw.rect(frame_surface, BLACK, (
             clock_x-10, clock_y-10,
             clock_text.get_width() + temp_text.get_width() + 70,
             clock_text.get_height() + 20
         ))
 
-        # Blit texts
         frame_surface.blit(station_text, (station_x, station_y))
         frame_surface.blit(clock_text, (clock_x, clock_y))
         frame_surface.blit(temp_text, (temp_x, temp_y))
@@ -421,7 +430,6 @@ def main():
         clock.tick(60)
 
     pygame.quit()
-
 
 if __name__ == "__main__":
     main()
