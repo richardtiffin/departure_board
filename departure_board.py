@@ -317,6 +317,7 @@ def main():
     departures = {}
     NO_DEPARTURES_COOLDOWN = 60  # seconds to wait if no trains
     last_successful_fetch = 0  # timestamp of last fetch with departures
+    allTemp = {code: "N/A" for code in station_codes}
 
     running = True
     while running:
@@ -327,11 +328,9 @@ def main():
 
         # --- Update temperature every 10 min ---
         if now - last_temp_update >= 600:
-            allTemp = {}
             for code in station_codes:
                 stationForTemp = STATIONS[code]
-                current_temp = get_temperature(stationForTemp.get("LATITUDE"),stationForTemp.get("LONGITUDE"))
-                allTemp[code] = current_temp
+                allTemp[code] = get_temperature(stationForTemp.get("LATITUDE"), stationForTemp.get("LONGITUDE"))
             last_temp_update = now
 
         # --- Rotate stations ---
@@ -342,10 +341,11 @@ def main():
             last_station_rotate = now
             station_changed = True
 
+        # --- Always update current station and temperature for display ---
         current_station = STATIONS[station_codes[station_index]]
         current_temp = allTemp.get(station_codes[station_index], "N/A")
         STATION_CODE = station_codes[station_index]
-        all_platforms = [str(p) for p in current_station.get("PLATFORMS",[])]
+        all_platforms = [str(p) for p in current_station.get("PLATFORMS", [])]
         platform_pages = list(get_paginated_platforms(all_platforms, PLATFORMS_PER_SCREEN))
 
         # --- Rotate platform pages ---
@@ -382,17 +382,16 @@ def main():
                     for item in static_text:
                         if isinstance(item[0], pygame.Surface):
                             static_surface.blit(item[0], item[1])
-                        elif isinstance(item[0], str) and item[0]=="CALLING_AT_LABEL":
+                        elif isinstance(item[0], str) and item[0] == "CALLING_AT_LABEL":
                             static_surface.blit(item[2], item[1])
                 else:
                     # No departures: start cooldown
                     last_successful_fetch = now
-
             last_update_time = now
 
         # --- Draw frame ---
         frame_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT)).convert()
-        frame_surface.blit(static_surface, (0,0))
+        frame_surface.blit(static_surface, (0, 0))
 
         for text in scrolling_texts:
             clip_rect = pygame.Rect(text.x_start, text.y_pos, text.clip_width, train_font.get_height())
@@ -425,7 +424,7 @@ def main():
         if ROTATE_DISPLAY:
             frame_surface = pygame.transform.rotate(frame_surface, 180)
 
-        screen.blit(frame_surface, (0,0))
+        screen.blit(frame_surface, (0, 0))
         pygame.display.flip()
         clock.tick(60)
 
