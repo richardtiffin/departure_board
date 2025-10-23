@@ -95,9 +95,9 @@ except Exception as e:
     logging.error(f"SOAP client init failed: {e}")
     TEST_MODE = True
 
-# === Service details cache to avoid repeated calls ===
+# === Service details cache ===
 service_details_cache = {}
-SERVICE_DETAILS_TTL = 600  # seconds, cache entries expire after 10 minutes
+SERVICE_DETAILS_TTL = 600
 last_service_details_cleanup = time.time()
 
 # === Pygame setup ===
@@ -106,9 +106,9 @@ pygame.init()
 pygame.mixer.quit()
 
 if FULLSCREEN:
-    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+    screen = pygame.display.set_mode((0,0), pygame.FULLSCREEN)
 else:
-    screen = pygame.display.set_mode((800, 480), 0)
+    screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 
 WINDOW_WIDTH, WINDOW_HEIGHT = screen.get_size()
 
@@ -185,13 +185,11 @@ def fetch_departures(station_code, target_platforms):
 
     # Cleanup old cache entries periodically
     if time.time() - last_service_details_cleanup > SERVICE_DETAILS_TTL:
-        service_details_cache = {}  # reset cache
+        service_details_cache = {}
         last_service_details_cleanup = time.time()
 
     try:
-        # Fetch main departure board once
         response = soap_client.service.GetDepartureBoard(40, station_code, _soapheaders=[soap_header_value])
-
         if not hasattr(response, 'trainServices') or not response.trainServices:
             return {p:[] for p in target_platforms}
 
@@ -208,7 +206,6 @@ def fetch_departures(station_code, target_platforms):
             status = "On time" if etd=="on time" else f"Exp {etd}" if ":" in etd or etd.startswith("exp") else "Exp unknown"
             calling_at = ""
 
-            # Only fetch service details if needed and not cached
             service_id = service.serviceID
             if len(services_by_platform[platform]) == 0:
                 if service_id in service_details_cache:
@@ -217,7 +214,7 @@ def fetch_departures(station_code, target_platforms):
                     try:
                         details = soap_client.service.GetServiceDetails(service_id, _soapheaders=[soap_header_value])
                         service_details_cache[service_id] = details
-                        time.sleep(0.2)  # small delay to avoid bursting requests
+                        time.sleep(0.2)
                     except:
                         details = None
 
@@ -230,21 +227,20 @@ def fetch_departures(station_code, target_platforms):
             services_by_platform[platform].append((departure_time, destination, calling_at, status))
 
         return services_by_platform
-
     except Exception as e:
         logging.exception(f"GetDepartureBoard failed for {station_code}: {e}")
         print("SOAP ERROR:", e)
         return {p:[] for p in target_platforms}
 
-
-def update_display_multi_platform_with_calling_at(departures_by_platform, static_text, scrolling_texts):
+def update_display_multi_platform_with_calling_at(departures_by_platform, static_text, scrolling_texts, current_targets):
     static_text.clear()
     scrolling_texts.clear()
     y_pos = station_font.get_height() + 50
 
-    for platform, departures in departures_by_platform.items():
+    for platform in current_targets:
+        departures = departures_by_platform.get(platform, [])
         if not departures:
-            continue  # Skip platforms with no trains
+            continue
 
         # Platform header
         header_text = f"Platform {platform}"
@@ -260,20 +256,17 @@ def update_display_multi_platform_with_calling_at(departures_by_platform, static
             line_y = y_pos
             static_text.append((train_font.render(departure_time, True, ORANGE),(20,line_y)))
 
-            # Destination scroll
-            if len(destination)>30:
+            if len(destination) > 30:
                 scrolling_texts.append(ScrollingText(line_y,destination,train_font.render("",True,ORANGE),x_margin=250))
             else:
                 static_text.append((train_font.render(destination, True, ORANGE),(250,line_y)))
 
-            # Status
             color = (255,0,0) if "Exp" in status else ORANGE
             status_surface = status_font.render(status, True, color)
             status_x = WINDOW_WIDTH - status_surface.get_width() -30
             status_y = line_y + (train_font.get_height()-status_surface.get_height())//2
             static_text.append((status_surface,(status_x,status_y)))
 
-            # Calling at scroll
             if calling_at:
                 y_pos += train_font.get_height() + 5
                 label_surface = train_font.render("Calling at:", True, ORANGE)
@@ -281,9 +274,8 @@ def update_display_multi_platform_with_calling_at(departures_by_platform, static
                 scrolling_texts.append(ScrollingText(y_pos, calling_at, label_surface, x_margin=150, gap=SCROLL_GAP))
                 y_pos += train_font.get_height() + 5
 
-            y_pos += train_font.get_height() + status_font.get_height() -40
+            y_pos += train_font.get_height() + status_font.get_height() - 40
         y_pos += 10
-
 
 def get_temperature(lat, lon):
     try:
@@ -306,18 +298,24 @@ def main():
     static_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT)).convert()
     last_update_time = 0
     last_temp_update = 0
-    current_temp = "N/A"
 
-    # --- Station rotation ---
     station_codes = list(STATIONS.keys())
     station_index = 0
     current_screen_index = 0
     last_station_rotate = time.time()
     last_screen_rotate = time.time()
     departures = {}
-    NO_DEPARTURES_COOLDOWN = 60  # seconds to wait if no trains
+    NO_DEPARTURES_COOLDOWN = 60
     last_successful_fetch = 0
     allTemp = {code: "N/A" for code in station_codes}
+
+    # Initialise first station/page
+    STATION_CODE = station_codes[station_index]
+    current_station = STATIONS[STATION_CODE]
+    current_temp = allTemp.get(STATION_CODE, "N/A")
+    all_platforms = [str(p) for p in current_station.get("PLATFORMS", [])]
+    platform_pages = list(get_paginated_platforms(all_platforms, PLATFORMS_PER_SCREEN))
+    current_targets = platform_pages[0] if platform_pages else []
 
     running = True
     while running:
@@ -341,30 +339,31 @@ def main():
             last_station_rotate = now
             station_changed = True
 
-        # --- Update current station & temperature ---
-        current_station = STATIONS[station_codes[station_index]]
-        current_temp = allTemp.get(station_codes[station_index], "N/A")
-        STATION_CODE = station_codes[station_index]
-        all_platforms = [str(p) for p in current_station.get("PLATFORMS", [])]
-        platform_pages = list(get_paginated_platforms(all_platforms, PLATFORMS_PER_SCREEN))
-
         # --- Rotate platform pages ---
         page_changed = False
         if len(platform_pages) > 1 and now - last_screen_rotate >= SCREEN_ROTATE_INTERVAL:
             current_screen_index = (current_screen_index + 1) % len(platform_pages)
-            current_targets = platform_pages[current_screen_index]
             last_screen_rotate = now
             page_changed = True
-        else:
-            current_targets = platform_pages[current_screen_index]
 
-        # --- Fetch departures if needed ---
+        # --- Fetch departures & update display ---
+        # --- Fetch departures & update display ---
         if station_changed or page_changed or now - last_update_time >= UPDATE_INTERVAL:
-            if now - last_successful_fetch >= NO_DEPARTURES_COOLDOWN:
-                departures = fetch_departures(STATION_CODE, current_targets)
-                if any(departures[p] for p in current_targets):
-                    last_successful_fetch = now
-            update_display_multi_platform_with_calling_at(departures, static_text, scrolling_texts)
+            STATION_CODE = station_codes[station_index]
+            current_station = STATIONS[STATION_CODE]
+            current_temp = allTemp.get(STATION_CODE, "N/A")
+
+            if station_changed:
+                all_platforms = [str(p) for p in current_station.get("PLATFORMS", [])]
+                platform_pages = list(get_paginated_platforms(all_platforms, PLATFORMS_PER_SCREEN))
+                current_screen_index = 0
+            current_targets = platform_pages[current_screen_index] if platform_pages else []
+
+            # **Always fetch departures for the new targets immediately**
+            departures = fetch_departures(STATION_CODE, current_targets)
+            last_successful_fetch = now
+
+            update_display_multi_platform_with_calling_at(departures, static_text, scrolling_texts, current_targets)
             static_surface.fill(BLACK)
             for item in static_text:
                 if isinstance(item[0], pygame.Surface):
@@ -373,10 +372,10 @@ def main():
                     static_surface.blit(item[2], item[1])
             last_update_time = now
 
+
         # --- Draw frame ---
         frame_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT)).convert()
-        frame_surface.blit(static_surface, (0, 0))
-
+        frame_surface.blit(static_surface, (0,0))
         for text in scrolling_texts:
             clip_rect = pygame.Rect(text.x_start, text.y_pos, text.clip_width, train_font.get_height())
             text.update()
@@ -408,7 +407,7 @@ def main():
         if ROTATE_DISPLAY:
             frame_surface = pygame.transform.rotate(frame_surface, 180)
 
-        screen.blit(frame_surface, (0, 0))
+        screen.blit(frame_surface, (0,0))
         pygame.display.flip()
         clock.tick(60)
 
@@ -416,4 +415,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
