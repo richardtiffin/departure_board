@@ -316,14 +316,14 @@ def main():
     last_screen_rotate = time.time()
     departures = {}
     NO_DEPARTURES_COOLDOWN = 60  # seconds to wait if no trains
-    last_successful_fetch = 0  # timestamp of last fetch with departures
+    last_successful_fetch = 0
     allTemp = {code: "N/A" for code in station_codes}
 
     running = True
     while running:
         now = time.time()
         for event in pygame.event.get():
-            if event.type == pygame.QUIT or (event.type==pygame.KEYDOWN and event.key==pygame.K_ESCAPE):
+            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                 running = False
 
         # --- Update temperature every 10 min ---
@@ -341,7 +341,7 @@ def main():
             last_station_rotate = now
             station_changed = True
 
-        # --- Always update current station and temperature for display ---
+        # --- Update current station & temperature ---
         current_station = STATIONS[station_codes[station_index]]
         current_temp = allTemp.get(station_codes[station_index], "N/A")
         STATION_CODE = station_codes[station_index]
@@ -351,42 +351,26 @@ def main():
         # --- Rotate platform pages ---
         page_changed = False
         if len(platform_pages) > 1 and now - last_screen_rotate >= SCREEN_ROTATE_INTERVAL:
-            for _ in range(len(platform_pages)):
-                current_screen_index = (current_screen_index + 1) % len(platform_pages)
-                current_targets = platform_pages[current_screen_index]
-
-                # Only fetch if cooldown elapsed
-                if now - last_successful_fetch < NO_DEPARTURES_COOLDOWN:
-                    break
-
-                departures = fetch_departures(STATION_CODE, current_targets)
-                if any(departures[p] for p in current_targets):
-                    page_changed = True
-                    last_screen_rotate = now
-                    last_successful_fetch = now
-                    break
-            else:
-                # No page has departures; keep current_screen_index and skip rotation
-                current_targets = platform_pages[current_screen_index]
+            current_screen_index = (current_screen_index + 1) % len(platform_pages)
+            current_targets = platform_pages[current_screen_index]
+            last_screen_rotate = now
+            page_changed = True
         else:
             current_targets = platform_pages[current_screen_index]
 
-        # --- Fetch departures if station/page changed or interval elapsed ---
+        # --- Fetch departures if needed ---
         if station_changed or page_changed or now - last_update_time >= UPDATE_INTERVAL:
             if now - last_successful_fetch >= NO_DEPARTURES_COOLDOWN:
                 departures = fetch_departures(STATION_CODE, current_targets)
                 if any(departures[p] for p in current_targets):
                     last_successful_fetch = now
-                    update_display_multi_platform_with_calling_at(departures, static_text, scrolling_texts)
-                    static_surface.fill(BLACK)
-                    for item in static_text:
-                        if isinstance(item[0], pygame.Surface):
-                            static_surface.blit(item[0], item[1])
-                        elif isinstance(item[0], str) and item[0] == "CALLING_AT_LABEL":
-                            static_surface.blit(item[2], item[1])
-                else:
-                    # No departures: start cooldown
-                    last_successful_fetch = now
+            update_display_multi_platform_with_calling_at(departures, static_text, scrolling_texts)
+            static_surface.fill(BLACK)
+            for item in static_text:
+                if isinstance(item[0], pygame.Surface):
+                    static_surface.blit(item[0], item[1])
+                elif isinstance(item[0], str) and item[0] == "CALLING_AT_LABEL":
+                    static_surface.blit(item[2], item[1])
             last_update_time = now
 
         # --- Draw frame ---
