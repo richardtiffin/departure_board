@@ -197,6 +197,7 @@ def fetch_departures(station_code, target_platforms):
 
         for service in response.trainServices.service:
             platform = str(service.platform)
+            operator = service.operator
             if platform not in services_by_platform or len(services_by_platform[platform]) >= 2:
                 continue
 
@@ -224,7 +225,7 @@ def fetch_departures(station_code, target_platforms):
                         points = point_lists[0].callingPoint
                         calling_at = ", ".join(cp.locationName for cp in points if hasattr(cp,"locationName"))
 
-            services_by_platform[platform].append((departure_time, destination, calling_at, status))
+            services_by_platform[platform].append((departure_time, destination, calling_at, status, operator))
 
         return services_by_platform
     except Exception as e:
@@ -252,14 +253,27 @@ def update_display_multi_platform_with_calling_at(departures_by_platform, static
         y_pos += header_surface.get_height() + 10
 
         for dep in departures:
-            departure_time, destination, calling_at, status = dep
+            departure_time, destination, calling_at, status, operator = dep
             line_y = y_pos
             static_text.append((train_font.render(departure_time, True, ORANGE),(20,line_y)))
 
-            if len(destination) > 30:
-                scrolling_texts.append(ScrollingText(line_y,destination,train_font.render("",True,ORANGE),x_margin=250))
+            # Combine destination and operator
+            full_destination = f"{destination} ({operator})"
+
+            # If too long, make it scroll
+            if len(full_destination) > 60:
+                scrolling_texts.append(
+                    ScrollingText(
+                        line_y,
+                        full_destination,
+                        train_font.render("", True, ORANGE),
+                        x_margin=250
+                    )
+                )
             else:
-                static_text.append((train_font.render(destination, True, ORANGE),(250,line_y)))
+                static_text.append(
+                    (train_font.render(full_destination, True, ORANGE), (250, line_y))
+                )
 
             color = (255,0,0) if "Exp" in status else ORANGE
             status_surface = status_font.render(status, True, color)
