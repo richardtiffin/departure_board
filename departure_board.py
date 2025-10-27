@@ -76,9 +76,9 @@ STATION_FONT_SIZE = config.get("STATION_FONT_SIZE", 80)
 PLATFORM_FONT_SIZE = config.get("PLATFORM_FONT_SIZE", 72)
 TRAIN_FONT_SIZE = config.get("TRAIN_FONT_SIZE", 56)
 STATUS_FONT_SIZE = config.get("STATUS_FONT_SIZE", 50)
-WINDOW_WIDTH = 800
-WINDOW_HEIGHT = 480
-FULLSCREEN = True
+WINDOW_WIDTH = config.get("WINDOW_WIDTH", 800)
+WINDOW_HEIGHT = config.get("WINDOW_HEIGHT", 480)
+FULLSCREEN = config.get("FULLSCREEN", False)
 
 # === Setup SOAP client ===
 WSDL_URL = "https://lite.realtime.nationalrail.co.uk/OpenLDBWS/wsdl.aspx"
@@ -237,6 +237,10 @@ def update_display_multi_platform_with_calling_at(departures_by_platform, static
     static_text.clear()
     scrolling_texts.clear()
     y_pos = station_font.get_height() + 50
+    
+    if all(not departures for departures in departures_by_platform.values()):
+        print("All platforms empty — skipping screen")
+        return False  # signal that screen should be skipped
 
     for platform in current_targets:
         departures = departures_by_platform.get(platform, [])
@@ -290,6 +294,8 @@ def update_display_multi_platform_with_calling_at(departures_by_platform, static
 
             y_pos += train_font.get_height() + status_font.get_height() - 40
         y_pos += 10
+
+    return True
 
 def get_temperature(lat, lon):
     try:
@@ -371,21 +377,44 @@ def main():
                 all_platforms = [str(p) for p in current_station.get("PLATFORMS", [])]
                 platform_pages = list(get_paginated_platforms(all_platforms, PLATFORMS_PER_SCREEN))
                 current_screen_index = 0
-            current_targets = platform_pages[current_screen_index] if platform_pages else []
 
-            # **Always fetch departures for the new targets immediately**
-            departures = fetch_departures(STATION_CODE, current_targets)
-            last_successful_fetch = now
+            # Safeguard for empty platform_pages
+            if not platform_pages:
+                station_index = (station_index + 1) % len(station_codes)
+                last_station_rotate = now
+                continue
 
-            update_display_multi_platform_with_calling_at(departures, static_text, scrolling_texts, current_targets)
-            static_surface.fill(BLACK)
-            for item in static_text:
-                if isinstance(item[0], pygame.Surface):
-                    static_surface.blit(item[0], item[1])
-                elif isinstance(item[0], str) and item[0] == "CALLING_AT_LABEL":
-                    static_surface.blit(item[2], item[1])
-            last_update_time = now
+            # Keep advancing until we find a page with departures or all pages checked
+            page_attempts = 0
+            success = False
+            while page_attempts < len(platform_pages):
+                current_targets = platform_pages[current_screen_index]
+                departures = fetch_departures(STATION_CODE, current_targets)
 
+                success = update_display_multi_platform_with_calling_at(
+                    departures, static_text, scrolling_texts, current_targets
+                )
+
+                if success:
+                    # We found a page with departures — render and break
+                    static_surface.fill(BLACK)
+                    for item in static_text:
+                        if isinstance(item[0], pygame.Surface):
+                            static_surface.blit(item[0], item[1])
+                        elif isinstance(item[0], str) and item[0] == "CALLING_AT_LABEL":
+                            static_surface.blit(item[2], item[1])
+                    last_update_time = now
+                    break
+                else:
+                    # Advance to the next page immediately
+                    current_screen_index = (current_screen_index + 1) % len(platform_pages)
+                    page_attempts += 1
+
+            # If all pages were empty, skip to next station
+            if not success:
+                station_index = (station_index + 1) % len(station_codes)
+                last_station_rotate = now
+                continue
 
         # --- Draw frame ---
         frame_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT)).convert()
