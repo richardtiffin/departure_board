@@ -192,7 +192,7 @@ def fetch_departures(station_code, target_platforms):
         response = soap_client.service.GetDepartureBoard(40, station_code, _soapheaders=[soap_header_value])
         if not hasattr(response, 'trainServices') or not response.trainServices:
             return {p:[] for p in target_platforms}
-
+        
         services_by_platform = {p:[] for p in target_platforms}
 
         for service in response.trainServices.service:
@@ -367,7 +367,6 @@ def main():
             page_changed = True
 
         # --- Fetch departures & update display ---
-        # --- Fetch departures & update display ---
         if station_changed or page_changed or now - last_update_time >= UPDATE_INTERVAL:
             STATION_CODE = station_codes[station_index]
             current_station = STATIONS[STATION_CODE]
@@ -410,11 +409,14 @@ def main():
                     current_screen_index = (current_screen_index + 1) % len(platform_pages)
                     page_attempts += 1
 
-            # If all pages were empty, skip to next station
+            # If all pages were empty, skip to next station — but back off to avoid hammering API
             if not success:
                 station_index = (station_index + 1) % len(station_codes)
                 last_station_rotate = now
+                last_update_time = now  # prevent immediate re-fetch
+                time.sleep(NO_DEPARTURES_COOLDOWN)
                 continue
+
 
         # --- Draw frame ---
         frame_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT)).convert()
