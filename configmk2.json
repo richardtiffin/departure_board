@@ -1,0 +1,41 @@
+{
+  "API_KEY": "be93d329-0050-4e75-84df-9c8c8cd6ee17",
+  "STATIONS": {
+    "CDF": {
+      "NAME": "Cardiff Central",
+      "PLATFORMS": [0, 1, 2, 3, 4, 6, 7, 8],
+      "LATITUDE": 51.47,
+      "LONGITUDE": -3.18
+    },
+    "NCL": {
+      "NAME": "Newcastle Central",
+      "PLATFORMS": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+      "LATITUDE": 54.968,
+      "LONGITUDE": -1.617
+    },
+    "MAN": {
+      "NAME": "Manchester Piccadily",
+      "PLATFORMS": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+      "LATITUDE": 53.4774,
+      "LONGITUDE": -2.2304
+    }
+  },
+  "STATION_ROTATE_INTERVAL": 180,
+  "PLATFORMS_PER_SCREEN": 4,
+  "SCREEN_ROTATE_INTERVAL": 45,
+  "UPDATE_INTERVAL": 60,
+  "TEST_MODE": false,
+  "ROTATE_DISPLAY": false,
+  "SCROLL_SPEED": 9,
+  "SCROLL_GAP": 200,
+  "CLOCK_FONT_SIZE": 40,
+  "PLATFORM_FONT_SIZE": 40,
+  "STATION_FONT_SIZE": 50,
+  "TRAIN_FONT_SIZE": 30,
+  "STATUS_FONT_SIZE": 20,
+  "WINDOW_WIDTH": 2560,
+  "WINDOW_HEIGHT": 1440,
+  "FULLSCREEN": false
+}
+
+  
