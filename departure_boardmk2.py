@@ -7,6 +7,7 @@ import logging
 import requests
 import sys
 from json import JSONDecodeError
+import math
 
 # === Setup logging ===
 logging.basicConfig(
@@ -165,7 +166,7 @@ def get_paginated_platforms(platforms, per_page):
     for i in range(0, len(platforms), per_page):
         yield platforms[i:i+per_page]
 
-# returns a list of nService services for the station_code
+# returns a list of nService services for the station_code (sliced by page)
 def fetch_departures(station_code, current_screen_index):
     global last_service_details_cleanup, service_details_cache
 
@@ -175,11 +176,14 @@ def fetch_departures(station_code, current_screen_index):
         last_service_details_cleanup = time.time()
 
     try:
+        if TEST_MODE or soap_client is None:
+            # In test mode we return an empty list (or you could craft test data)
+            return []
+
         response = soap_client.service.GetDepartureBoard(NSERVICE, station_code, _soapheaders=[soap_header_value])
         if not hasattr(response, 'trainServices') or not response.trainServices:
             return []
-        
-        # services_by_platform = {p:[] for p in target_platforms}
+
         services = []
         current_train_index = current_screen_index * TRAINSPERSCREEN
         for service in response.trainServices.service[current_train_index: current_train_index + TRAINSPERSCREEN]:
@@ -188,17 +192,14 @@ def fetch_departures(station_code, current_screen_index):
             else:
                 platform = "N/A"
             operator = service.operator
-            # if platform not in services_by_platform or len(services_by_platform[platform]) >= 2:
-            #     continue
 
             destination = service.destination.location[0].locationName
             departure_time = getattr(service, "std", "")
             etd = getattr(service, "etd", "").strip().lower()
-            status = "On time" if etd=="on time" else f"Exp {etd}" if ":" in etd or etd.startswith("exp") else "Exp unknown"
+            status = "On time" if etd == "on time" else f"Exp {etd}" if ":" in etd or etd.startswith("exp") else "Exp unknown"
             calling_at = ""
 
             service_id = service.serviceID
-            # if len(services_by_platform[platform]) == 0:
             if service_id in service_details_cache:
                 details = service_details_cache[service_id]
             else:
@@ -211,7 +212,7 @@ def fetch_departures(station_code, current_screen_index):
 
             if details and hasattr(details,'subsequentCallingPoints') and details.subsequentCallingPoints:
                 point_lists = details.subsequentCallingPoints.callingPointList
-                if isinstance(point_lists,list) and point_lists:
+                if isinstance(point_lists, list) and point_lists:
                     points = point_lists[0].callingPoint
                     calling_at = ", ".join(cp.locationName for cp in points if hasattr(cp,"locationName"))
 
@@ -227,54 +228,44 @@ def update_display_multi_platform_with_calling_at(departures, static_text, scrol
     static_text.clear()
     scrolling_texts.clear()
     y_pos = station_font.get_height() + 50
-    
+
     if not departures:
-        print("No departures — skipping screen")
+        # No departures on this page
         return False
 
     for dep in departures:
         departure_time, destination, platform, calling_at, status, operator = dep
         line_y = y_pos
 
-        # Column X positions
+        # Column X positions (tweak to taste)
         x_time = 10
         x_dest = 200
         x_plat = 700
         x_op = 860
 
         # Draw departure time
-        static_text.append(
-            (train_font.render(departure_time, True, ORANGE), (x_time, line_y))
-        )
+        static_text.append((train_font.render(departure_time, True, ORANGE), (x_time, line_y)))
 
         # Draw destination
-        static_text.append(
-            (train_font.render(destination, True, ORANGE), (x_dest, line_y))
-        )
+        static_text.append((train_font.render(destination, True, ORANGE), (x_dest, line_y)))
 
         # Draw platform number
         platformNo = f"Plat {platform}"
-        static_text.append(
-            (train_font.render(platformNo, True, ORANGE), (x_plat, line_y))
-        )
+        static_text.append((train_font.render(platformNo, True, ORANGE), (x_plat, line_y)))
 
         operatorp = f"({operator})"
-
-        # Draw operator
-        static_text.append(
-            (train_font.render(operatorp, True, ORANGE), (x_op, line_y))
-        )
+        static_text.append((train_font.render(operatorp, True, ORANGE), (x_op, line_y)))
 
         color = (255,0,0) if "Exp" in status else ORANGE
         status_surface = status_font.render(status, True, color)
-        status_x = WINDOW_WIDTH - status_surface.get_width() -30
-        status_y = line_y + (train_font.get_height()-status_surface.get_height())//2
-        static_text.append((status_surface,(status_x,status_y)))
+        status_x = WINDOW_WIDTH - status_surface.get_width() - 30
+        status_y = line_y + (train_font.get_height() - status_surface.get_height()) // 2
+        static_text.append((status_surface, (status_x, status_y)))
 
         if calling_at:
             y_pos += train_font.get_height() + 5
             label_surface = train_font.render("Calling at:", True, ORANGE)
-            static_text.append(("CALLING_AT_LABEL",(20,y_pos),label_surface))
+            static_text.append(("CALLING_AT_LABEL", (20, y_pos), label_surface))
             scrolling_texts.append(ScrollingText(y_pos, calling_at, label_surface, x_margin=150, gap=SCROLL_GAP))
             y_pos += train_font.get_height() + 5
 
@@ -319,9 +310,9 @@ def main():
     STATION_CODE = station_codes[station_index]
     current_station = STATIONS[STATION_CODE]
     current_temp = allTemp.get(STATION_CODE, "N/A")
-    # all_platforms = [str(p) for p in current_station.get("PLATFORMS", [])]
-    # platform_pages = list(get_paginated_platforms(all_platforms, PLATFORMS_PER_SCREEN))
-    # current_targets = platform_pages[0] if platform_pages else []
+
+    # derived page_count from NSERVICE and TRAINSPERSCREEN
+    page_count = max(1, (NSERVICE + TRAINSPERSCREEN - 1) // TRAINSPERSCREEN)
 
     running = True
     while running:
@@ -345,14 +336,17 @@ def main():
             last_station_rotate = now
             station_changed = True
 
-        # --- Rotate platform pages ---
+        # --- Rotate pages/screens ---
         page_changed = False
         if now - last_screen_rotate >= SCREEN_ROTATE_INTERVAL:
-            current_screen_index = (current_screen_index + 1) % TRAINSPERSCREEN
+            # rotate within available page_count
+            current_screen_index = (current_screen_index + 1) % page_count
             last_screen_rotate = now
             page_changed = True
 
-        # --- Fetch departures & update display ---
+        # --- Fetch departures & update display (attempt pages without using continue) ---
+        draw_ready = False
+        # Only refresh when needed
         if station_changed or page_changed or now - last_update_time >= UPDATE_INTERVAL:
             STATION_CODE = station_codes[station_index]
             current_station = STATIONS[STATION_CODE]
@@ -361,44 +355,67 @@ def main():
             if station_changed:
                 current_screen_index = 0
 
-            # Keep advancing until we find a page with departures or all pages checked
-            page_attempts = 0
-            success = False
-            print(current_screen_index)
-            departures = fetch_departures(STATION_CODE, current_screen_index)
+            # Try up to page_count pages starting from current_screen_index
+            attempts = 0
+            start_index = current_screen_index
+            while attempts < page_count:
+                idx = (start_index + attempts) % page_count
+                departures = fetch_departures(STATION_CODE, idx)
 
-            success = update_display_multi_platform_with_calling_at(
-                departures, static_text, scrolling_texts
-            )
+                success = update_display_multi_platform_with_calling_at(departures, static_text, scrolling_texts)
+                if success:
+                    # prepare the static_surface from static_text
+                    static_surface.fill(BLACK)
+                    for item in static_text:
+                        if isinstance(item[0], pygame.Surface):
+                            static_surface.blit(item[0], item[1])
+                        elif isinstance(item[0], str) and item[0] == "CALLING_AT_LABEL":
+                            static_surface.blit(item[2], item[1])
+                    last_update_time = now
+                    draw_ready = True
+                    # set current_screen_index to the page we actually displayed
+                    current_screen_index = idx
+                    break
+                else:
+                    attempts += 1
 
-            if success:
-                # We found a page with departures — render and break
+            if not draw_ready:
+                # Nothing found on any page for this station — show a fallback message and back off
+                logging.info(f"No departures for station {STATION_CODE} on any page. Backing off {NO_DEPARTURES_COOLDOWN}s.")
+                # make a simple "No departures" static surface so we don't show a stale/blank frame
                 static_surface.fill(BLACK)
-                for item in static_text:
-                    if isinstance(item[0], pygame.Surface):
-                        static_surface.blit(item[0], item[1])
-                    elif isinstance(item[0], str) and item[0] == "CALLING_AT_LABEL":
-                        static_surface.blit(item[2], item[1])
-                last_update_time = now
-            else:
-                # Advance to the next page immediately
-                print("resetting")
-                current_screen_index = 0
-                page_attempts += 1
-                continue
+                no_dep_text = train_font.render("No departures", True, ORANGE)
+                station_name_text = station_font.render(current_station.get("NAME", ""), True, ORANGE)
+                static_surface.blit(station_name_text, ((WINDOW_WIDTH - station_name_text.get_width())//2, 40))
+                static_surface.blit(no_dep_text, ((WINDOW_WIDTH - no_dep_text.get_width())//2, WINDOW_HEIGHT//2 - no_dep_text.get_height()//2))
+                screen.blit(static_surface, (0,0))
+                pygame.display.flip()
 
-            # If all pages were empty, skip to next station — but back off to avoid hammering API
-            if not success:
+                # advance to next station and back off
                 station_index = (station_index + 1) % len(station_codes)
                 last_station_rotate = now
-                last_update_time = now  # prevent immediate re-fetch
-                time.sleep(NO_DEPARTURES_COOLDOWN)
-                continue
+                last_update_time = now
+                # gentle backoff — sleep while keeping the UI responsive for a short time
+                backoff_end = time.time() + NO_DEPARTURES_COOLDOWN
+                while time.time() < backoff_end:
+                    for event in pygame.event.get():
+                        if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                            running = False
+                            break
+                    # update clock display while waiting
+                    current_time = datetime.now().strftime("%H:%M:%S")
+                    clock_text = clock_font.render(current_time, True, ORANGE)
+                    frame_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT)).convert()
+                    frame_surface.blit(static_surface, (0, 0))
+                    frame_surface.blit(clock_text, ((WINDOW_WIDTH - clock_text.get_width())//2, WINDOW_HEIGHT - clock_text.get_height() - 20))
+                    screen.blit(frame_surface, (0,0))
+                    pygame.display.flip()
+                    clock.tick(1)  # low framerate during backoff
 
-
-        # --- Draw frame ---
+        # --- Draw frame (regular) ---
         frame_surface = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT)).convert()
         frame_surface.blit(static_surface, (0,0))
+
         for text in scrolling_texts:
             clip_rect = pygame.Rect(text.x_start, text.y_pos, text.clip_width, train_font.get_height())
             text.update()
