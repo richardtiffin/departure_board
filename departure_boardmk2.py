@@ -196,7 +196,7 @@ def fetch_departures(station_code, current_screen_index):
             destination = service.destination.location[0].locationName
             departure_time = getattr(service, "std", "")
             etd = getattr(service, "etd", "").strip().lower()
-            status = "On time" if etd == "on time" else f"Exp {etd}" if ":" in etd or etd.startswith("exp") else "Exp unknown"
+            status = "On time" if etd == "on time" else f"Exp {etd}" if ":" in etd or etd.startswith("exp") else "cancelled" if etd == "cancelled" else "Exp unknown"
             calling_at = ""
 
             service_id = service.serviceID
