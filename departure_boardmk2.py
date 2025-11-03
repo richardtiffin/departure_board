@@ -196,25 +196,28 @@ def fetch_departures(station_code, current_screen_index):
             destination = service.destination.location[0].locationName
             departure_time = getattr(service, "std", "")
             etd = getattr(service, "etd", "").strip().lower()
-            status = "On time" if etd == "on time" else f"Exp {etd}" if ":" in etd or etd.startswith("exp") else "cancelled" if etd == "cancelled" else "Exp unknown"
+            status = "On time" if etd == "on time" else f"Exp {etd}" if ":" in etd or etd.startswith("exp") else "Cancelled" if etd == "cancelled" else "Exp unknown"
             calling_at = ""
 
-            service_id = service.serviceID
-            if service_id in service_details_cache:
-                details = service_details_cache[service_id]
+            if status == "Cancelled":
+                calling_at = service.cancelReason
             else:
-                try:
-                    details = soap_client.service.GetServiceDetails(service_id, _soapheaders=[soap_header_value])
-                    service_details_cache[service_id] = details
-                    time.sleep(0.2)
-                except:
-                    details = None
+                service_id = service.serviceID
+                if service_id in service_details_cache:
+                    details = service_details_cache[service_id]
+                else:
+                    try:
+                        details = soap_client.service.GetServiceDetails(service_id, _soapheaders=[soap_header_value])
+                        service_details_cache[service_id] = details
+                        time.sleep(0.2)
+                    except:
+                        details = None
 
-            if details and hasattr(details,'subsequentCallingPoints') and details.subsequentCallingPoints:
-                point_lists = details.subsequentCallingPoints.callingPointList
-                if isinstance(point_lists, list) and point_lists:
-                    points = point_lists[0].callingPoint
-                    calling_at = ", ".join(cp.locationName for cp in points if hasattr(cp,"locationName"))
+                if details and hasattr(details,'subsequentCallingPoints') and details.subsequentCallingPoints:
+                    point_lists = details.subsequentCallingPoints.callingPointList
+                    if isinstance(point_lists, list) and point_lists:
+                        points = point_lists[0].callingPoint
+                        calling_at = ", ".join(cp.locationName for cp in points if hasattr(cp,"locationName"))
 
             services.append((departure_time, destination, platform, calling_at, status, operator))
 
@@ -256,7 +259,7 @@ def update_display_multi_platform_with_calling_at(departures, static_text, scrol
         operatorp = f"({operator})"
         static_text.append((train_font.render(operatorp, True, ORANGE), (x_op, line_y)))
 
-        color = (255,0,0) if "Exp" in status else ORANGE
+        color = (255,0,0) if ("Exp" in status or status == "Cancelled") else ORANGE
         status_surface = status_font.render(status, True, color)
         status_x = WINDOW_WIDTH - status_surface.get_width() - 30
         status_y = line_y + (train_font.get_height() - status_surface.get_height()) // 2

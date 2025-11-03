@@ -2,6 +2,8 @@ from zeep import Client
 from zeep.transports import Transport  # <- import Transport
 from requests import Session
 from requests.exceptions import HTTPError
+from zeep.helpers import serialize_object
+from pprint import pprint
 
 WSDL_URL = "https://lite.realtime.nationalrail.co.uk/OpenLDBWS/wsdl.aspx?ver=2021-11-01"
 API_KEY = "be93d329-0050-4e75-84df-9c8c8cd6ee17"
@@ -27,7 +29,7 @@ client = Client(wsdl=WSDL_URL, transport=transport)
 # Make request with rate-limit detection
 try:
     response = client.service.GetDepartureBoard(
-        numRows=10,
+        numRows=2,
         crs="CDF",
         _soapheaders=[header_value]
     )
@@ -40,3 +42,8 @@ except HTTPError as e:
 except Exception as e:
     # Catch other Zeep faults
     print("SOAP ERROR:", e)
+
+
+response_dict = serialize_object(response)
+pprint(response_dict)
+
