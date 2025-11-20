@@ -64,6 +64,7 @@ except JSONDecodeError as e:
 
 API_KEY = config.get("API_KEY")
 STATIONS = config.get("STATIONS", {})
+SELECT_STATIONS = config.get("SELECT_STATIONS")
 STATION_ROTATE_INTERVAL = config.get("STATION_ROTATE_INTERVAL", 60)
 # PLATFORMS_PER_SCREEN = config.get("PLATFORMS_PER_SCREEN", 4)
 SCREEN_ROTATE_INTERVAL = config.get("SCREEN_ROTATE_INTERVAL", 20)
@@ -82,6 +83,8 @@ WINDOW_HEIGHT = config.get("WINDOW_HEIGHT", 480)
 FULLSCREEN = config.get("FULLSCREEN", False)
 NSERVICE = config.get("NSERVICE", 6)
 TRAINSPERSCREEN = config.get("TRAINSPERSCREEN", 10)
+
+STATIONS = {k: STATIONS[k] for k in SELECT_STATIONS}
 
 # === Setup SOAP client ===
 WSDL_URL = "https://lite.realtime.nationalrail.co.uk/OpenLDBWS/wsdl.aspx"
@@ -217,7 +220,7 @@ def fetch_departures(station_code, current_screen_index):
                     point_lists = details.subsequentCallingPoints.callingPointList
                     if isinstance(point_lists, list) and point_lists:
                         points = point_lists[0].callingPoint
-                        calling_at = ", ".join(cp.locationName for cp in points if hasattr(cp,"locationName"))
+                        calling_at = ", ".join(f"{cp.locationName} ({cp.st})" for cp in points if hasattr(cp,"locationName"))
 
             services.append((departure_time, destination, platform, calling_at, status, operator))
 
