@@ -1,0 +1,55 @@
+{
+    "API_URL": "http://192.168.0.146:8085/departures",
+
+    "SELECT_STATIONS": [
+        "BGN",
+        "CDF",
+        "NCL",
+        "MAN"
+    ],
+
+    "STATIONS": {
+        "BGN": {
+            "NAME": "Bridgend",
+            "LATITUDE": 51.5069,
+            "LONGITUDE": -3.5753
+        },
+        "CDF": {
+            "NAME": "Cardiff Central",
+            "LATITUDE": 51.47,
+            "LONGITUDE": -3.18
+        },
+        "NCL": {
+            "NAME": "Newcastle",
+            "LATITUDE": 54.968,
+            "LONGITUDE": -1.617
+        },
+        "MAN": {
+            "NAME": "Manchester Piccadilly",
+            "LATITUDE": 53.4774,
+            "LONGITUDE": -2.2304
+        }
+    },
+
+    "STATION_ROTATE_INTERVAL": 100,
+    "SCREEN_ROTATE_INTERVAL": 20,
+    "UPDATE_INTERVAL": 60,
+
+    "TEST_MODE": false,
+    "ROTATE_DISPLAY": false,
+
+    "SCROLL_SPEED": 9,
+    "SCROLL_GAP": 200,
+
+    "CLOCK_FONT_SIZE": 40,
+    "STATION_FONT_SIZE": 50,
+    "TRAIN_FONT_SIZE": 30,
+    "STATUS_FONT_SIZE": 20,
+
+    "WINDOW_WIDTH": 2560,
+    "WINDOW_HEIGHT": 1440,
+    "FULLSCREEN": true,
+
+    "NSERVICE": 28,
+    "TRAINSPERSCREEN": 7
+}

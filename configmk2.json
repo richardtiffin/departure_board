@@ -1,43 +1,58 @@
 {
   "API_KEY": "be93d329-0050-4e75-84df-9c8c8cd6ee17",
-  "SELECT_STATIONS": ["BGN", "CDF", "NCL"],
+  "SELECT_STATIONS": ["BGN", "CDF", "NCL", "MAN"],
   "STATIONS": {
     "BGN": {
       "NAME": "Bridgend",
       "PLATFORMS": [0, 1, 2, 3, 4, 6, 7, 8],
       "LATITUDE": 51.5069,
-      "LONGITUDE": -3.5753
+      "LONGITUDE": -3.5753,
+      "TIPLOC": "BRGEND"
     },
     "BRI": {
       "NAME": "Bristol Temple Meads",
       "PLATFORMS": [0, 1, 2, 3, 4, 6, 7, 8],
       "LATITUDE": 51.4491,
-      "LONGITUDE": -2.5813
+      "LONGITUDE": -2.5813,
+      "TIPLOC": "BRSTLTM"
     },
     "CAR": {
       "NAME": "Carlisle",
       "PLATFORMS": [0, 1, 2, 3, 4, 6, 7, 8],
       "LATITUDE": 54.8903,
-      "LONGITUDE": -2.9336
+      "LONGITUDE": -2.9336,
+      "TIPLOC": "CARLILE"
     },
     "CDF": {
       "NAME": "Cardiff Central",
       "PLATFORMS": [0, 1, 2, 3, 4, 6, 7, 8],
       "LATITUDE": 51.47,
-      "LONGITUDE": -3.18
+      "LONGITUDE": -3.18,
+      "TIPLOC": "CRDFCEN"
     },
     "NCL": {
-      "NAME": "Newcastle Central",
+      "NAME": "Newcastle",
       "PLATFORMS": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
       "LATITUDE": 54.968,
-      "LONGITUDE": -1.617
+      "LONGITUDE": -1.617,
+      "TIPLOC": "NWCSTLE"
     },
     "MAN": {
       "NAME": "Manchester Piccadily",
       "PLATFORMS": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
       "LATITUDE": 53.4774,
-      "LONGITUDE": -2.2304
+      "LONGITUDE": -2.2304,
+      "TIPLOC": "MNCRPIC"
     }
+  },
+  "RDM_KAFKA": {
+    "BOOTSTRAP_SERVERS": "pkc-z3p1v0.europe-west2.gcp.confluent.cloud:9092",
+    "SECURITY_PROTOCOL": "SASL_SSL",
+    "SASL_MECHANISM": "PLAIN",
+    "USERNAME": "AOM27D6HKU7EX5TF",
+    "PASSWORD": "cfltEt2LiJMB+XXZZhN5rdls3gjTTL50RdEEyg+8pOwTkoVkEqvnLr0VYy5HPSZg",
+    "GROUP_ID": "SC-eb6dc6c5-587d-4f1a-9567-f97f31d2daf6",
+    "TOPIC": "prod-1010-Darwin-Train-Information-Push-Port-IIII2_0-JSON"
   },
   "STATION_ROTATE_INTERVAL": 100,
   "PLATFORMS_PER_SCREEN": 4,
@@ -58,5 +73,7 @@
   "NSERVICE": 28,
   "TRAINSPERSCREEN": 7
 }
+
+
 
   
