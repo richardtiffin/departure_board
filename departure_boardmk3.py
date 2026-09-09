@@ -776,6 +776,10 @@ def fetch_departures(
                 or "Unknown"
             )
 
+            if destination.isupper():
+                destination = destination.title()
+
+
             # ------------------------------------------------
             # Prefer the platform supplied at the station
             # level by the API.
