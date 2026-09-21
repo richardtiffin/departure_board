@@ -332,16 +332,23 @@ class ScrollingText:
         x_margin=10,
         gap=SCROLL_GAP
     ):
-
         self.text = text
 
-        rendered_text = train_font.render(
-            self.text,
-            True,
-            ORANGE
+        parts = (
+            text
+            if isinstance(text, list)
+            else [(text, ORANGE)]
         )
 
-        self.text_width = rendered_text.get_width()
+        rendered_parts = [
+            train_font.render(part_text, True, colour)
+            for part_text, colour in parts
+        ]
+
+        self.text_width = sum(
+            part.get_width()
+            for part in rendered_parts
+        )
 
         self.surface = pygame.Surface(
             (
@@ -351,28 +358,18 @@ class ScrollingText:
             pygame.SRCALPHA
         )
 
-        self.surface.blit(
-            rendered_text,
-            (0, 0)
-        )
+        x_pos = 0
+
+        for rendered_part in rendered_parts:
+            self.surface.blit(rendered_part, (x_pos, 0))
+            x_pos += rendered_part.get_width()
 
         self.y_pos = y_pos
-
-        self.x_start = (
-            label_surface.get_width()
-            + x_margin
-        )
-
+        self.x_start = label_surface.get_width() + x_margin
         self.x_pos = self.x_start
-
         self.speed = SCROLL_SPEED
         self.gap = gap
-
-        self.clip_width = (
-            WINDOW_WIDTH
-            - self.x_start
-            - 20
-        )
+        self.clip_width = WINDOW_WIDTH - self.x_start - 20
 
     def update(self):
 
@@ -626,33 +623,27 @@ def find_station_call(service, station_code):
     return None
 
 
+def get_calling_point_realtime_departure(point):
+    departure = point.get("departure") or {}
+
+    realtime_departure = departure.get("realtime")
+
+    if realtime_departure:
+        return format_time(realtime_departure)
+
+
 def build_calling_at(service, station_code):
-    """
-    Build the 'Calling at:' text.
-
-    Only timetable calling points after the current station
-    are included.
-
-    Realtime updates from Redis/Darwin are deliberately not
-    used to create or remove calling points.
-    """
-
-    calling_points = service.get(
-        "calling_points"
-    ) or []
+    """Build the 'Calling at:' text from timetable calling points."""
+    calling_points = service.get("calling_points") or []
 
     if not calling_points:
         return ""
 
     station_code = station_code.upper()
-
     current_index = None
 
     for index, point in enumerate(calling_points):
-
-        point_crs = str(
-            point.get("crs") or ""
-        ).upper()
+        point_crs = str(point.get("crs") or "").upper()
 
         if point_crs == station_code:
             current_index = index
@@ -661,28 +652,40 @@ def build_calling_at(service, station_code):
     if current_index is None:
         return ""
 
-    subsequent_points = calling_points[
-        current_index + 1:
-    ]
-
     result = []
 
-    for point in subsequent_points:
-
+    for point in calling_points[current_index + 1:]:
         name = get_calling_point_name(point)
+        timetable_time = get_calling_point_time(point)
+        estimated_departure = get_calling_point_realtime_departure(point)
 
-        timetable_time = get_calling_point_time(
-            point
+        is_estimated = (
+            estimated_departure
+            and estimated_departure != timetable_time
         )
 
-        if timetable_time:
-            result.append(
-                f"{name} ({timetable_time})"
-            )
-        else:
-            result.append(name)
+        display_time = (
+            estimated_departure
+            if is_estimated
+            else timetable_time
+        )
 
-    return ", ".join(result)
+        if result:
+            result.append((", ", ORANGE))
+
+        if display_time:
+            result.append((f"{name} (", ORANGE))
+            result.append(
+                (
+                    display_time,
+                    RED if is_estimated else ORANGE
+                )
+            )
+            result.append((")", ORANGE))
+        else:
+            result.append((name, ORANGE))
+
+    return result
 
 
 # ============================================================

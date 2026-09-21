@@ -1,0 +1,4 @@
+confluent_kafka==2.15.1
+pygame==2.6.1
+Requests==2.34.2
+zeep==4.3.3
