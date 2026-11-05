@@ -509,7 +509,7 @@ def get_service_status(service):
     # Timetable and realtime departure
     # --------------------------------------------------------
 
-    timetable = departure.get("public")
+    timetable = departure.get("timetable")
     realtime = departure.get("realtime")
 
     if not realtime:
