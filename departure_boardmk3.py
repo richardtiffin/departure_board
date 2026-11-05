@@ -586,19 +586,9 @@ def get_calling_point_time(point):
     """
 
     arrival = point.get("arrival") or {}
-    departure = point.get("departure") or {}
+    
+    return format_time(arrival.get("timetable"))
 
-    timetable_departure = departure.get("public")
-
-    if timetable_departure:
-        return format_time(timetable_departure)
-
-    timetable_arrival = arrival.get("timetable")
-
-    if timetable_arrival:
-        return format_time(timetable_arrival)
-
-    return ""
 
 
 def find_station_call(service, station_code):
@@ -624,16 +614,15 @@ def find_station_call(service, station_code):
 
 
 def get_calling_point_realtime_departure(point):
-    departure = point.get("departure") or {}
+    arrival = point.get("arrival") or {}
 
-    realtime_departure = departure.get("realtime")
+    realtime = arrival.get("realtime")
 
-    if realtime_departure:
-        return format_time(realtime_departure)
+    return format_time(realtime)
 
 
 def build_calling_at(service, station_code):
-    """Build the 'Calling at:' text from timetable calling points."""
+    """Build calling point times, showing delayed realtime estimates."""
     calling_points = service.get("calling_points") or []
 
     if not calling_points:
@@ -657,18 +646,23 @@ def build_calling_at(service, station_code):
     for point in calling_points[current_index + 1:]:
         name = get_calling_point_name(point)
         timetable_time = get_calling_point_time(point)
-        estimated_departure = get_calling_point_realtime_departure(point)
+        realtime_time = get_calling_point_realtime_departure(point)
 
-        is_estimated = (
-            estimated_departure
-            and estimated_departure != timetable_time
+        timetable_seconds = parse_time_to_seconds(timetable_time)
+        realtime_seconds = parse_time_to_seconds(realtime_time)
+
+        is_delayed = (
+            timetable_seconds is not None
+            and realtime_seconds is not None
+            and realtime_seconds > timetable_seconds
         )
 
-        display_time = (
-            estimated_departure
-            if is_estimated
-            else timetable_time
+        is_red = (
+            is_delayed
+            and realtime_seconds - timetable_seconds >= 120
         )
+
+        display_time = realtime_time if is_delayed else timetable_time
 
         if result:
             result.append((", ", ORANGE))
@@ -678,7 +672,7 @@ def build_calling_at(service, station_code):
             result.append(
                 (
                     display_time,
-                    RED if is_estimated else ORANGE
+                    RED if is_red else ORANGE
                 )
             )
             result.append((")", ORANGE))
@@ -771,7 +765,7 @@ def fetch_departures(
             ) or {}
 
             departure_time = format_time(
-                departure.get("public")
+                departure.get("timetable")
             )
 
             destination = (
